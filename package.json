@@ -15,12 +15,15 @@
     "lint": "eslint \"src/**/*.ts\" --fix"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/event-emitter": "^3.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@octokit/rest": "^22.0.1",
     "@slack/bolt": "^4.7.0",
+    "elevenlabs": "^1.59.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

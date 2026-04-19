@@ -1,7 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { App } from '@slack/bolt';
+import { PrFailedEvent } from '../events/pr-failed.event';
 import { PrReceivedEvent } from '../events/pr-received.event';
 
 const TRIGGER_PATTERN =
@@ -33,6 +34,23 @@ export class SlackService implements OnModuleInit {
     void this.app.start().then(() => {
       this.logger.log('Slack app connected via Socket Mode');
     });
+  }
+
+  async postMessage(channelId: string, text: string): Promise<void> {
+    try {
+      await this.app.client.chat.postMessage({ channel: channelId, text });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to post Slack message: ${msg}`);
+    }
+  }
+
+  @OnEvent('pr.failed')
+  async handlePrFailed(payload: PrFailedEvent): Promise<void> {
+    await this.postMessage(
+      payload.channelId,
+      `Failed to process PR #${payload.prNumber}: ${payload.reason}`,
+    );
   }
 
   private registerMessageHandler() {
