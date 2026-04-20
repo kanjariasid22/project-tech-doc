@@ -6,7 +6,7 @@ import { PrFailedEvent } from '../events/pr-failed.event';
 import { PrReceivedEvent } from '../events/pr-received.event';
 
 const TRIGGER_PATTERN =
-  /^document\s+#PR-(\d+)\s+(https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+)\s*$/i;
+  /^document\s+#PR-(\d+)\s+<?((https?:\/\/github\.com\/([^/]+)\/([^/>]+)\/pull\/\d+))>?\s*$/i;
 
 const INVALID_FORMAT_MSG =
   'Invalid format. Use: document #PR-<number> <github-pr-url>';
@@ -71,7 +71,7 @@ export class SlackService implements OnModuleInit {
         return;
       }
 
-      const [, rawNumber, prUrl, repoOwner, repoName] = match;
+      const [, rawNumber, prUrl, , repoOwner, repoName] = match;
       const prNumber = parseInt(rawNumber, 10);
 
       const event = Object.assign(new PrReceivedEvent(), {
