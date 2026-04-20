@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import type { AnalysisResult } from '../common/interfaces/analysis-result.interface';
 import type { PRContext } from '../common/interfaces/pr-context.interface';
 import { PrAnalyzedEvent } from '../events/pr-analyzed.event';
 import { PrFailedEvent } from '../events/pr-failed.event';
+
+const MODEL = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `You are a technical documentation assistant. Analyze the given PR diff and context. Return a JSON object with:
 - summary: one paragraph explaining what this PR does
@@ -14,19 +16,17 @@ const SYSTEM_PROMPT = `You are a technical documentation assistant. Analyze the 
 - questions: string[] of 3-5 targeted questions to ask the developer to fill gaps in understanding
 Return only valid JSON, no markdown, no preamble.`;
 
-const MODEL = 'claude-sonnet-4-20250514';
-
 @Injectable()
 export class AnalysisService {
   private readonly logger = new Logger(AnalysisService.name);
-  private readonly client: Anthropic;
+  private readonly ai: GoogleGenAI;
 
   constructor(
     private readonly config: ConfigService,
     private readonly events: EventEmitter2,
   ) {
-    this.client = new Anthropic({
-      apiKey: this.config.getOrThrow<string>('ANTHROPIC_API_KEY'),
+    this.ai = new GoogleGenAI({
+      apiKey: this.config.getOrThrow<string>('GEMINI_API_KEY'),
     });
   }
 
@@ -39,18 +39,16 @@ export class AnalysisService {
     const { prNumber, channelId } = prContext;
 
     try {
-      const userMessage = this.buildUserMessage(prContext);
-
-      const response = await this.client.messages.create({
+      const response = await this.ai.models.generateContent({
         model: MODEL,
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userMessage }],
+        contents: this.buildUserMessage(prContext),
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          responseMimeType: 'application/json',
+        },
       });
 
-      const rawText =
-        response.content[0].type === 'text' ? response.content[0].text : '';
-
+      const rawText = response.text ?? '';
       const analysis = JSON.parse(rawText) as AnalysisResult;
 
       const event = Object.assign(new PrAnalyzedEvent(), {

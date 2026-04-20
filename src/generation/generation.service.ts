@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import Anthropic from '@anthropic-ai/sdk';
-import { PRContext } from '../common/interfaces/pr-context.interface';
+import { GoogleGenAI } from '@google/genai';
+import type { PRContext } from '../common/interfaces/pr-context.interface';
 import { DocsGeneratedEvent } from '../events/docs-generated.event';
 import { PrFailedEvent } from '../events/pr-failed.event';
 import { VoiceCompletedEvent } from '../events/voice-completed.event';
 
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'gemini-2.5-flash';
 
 const TECH_DOC_SYSTEM = `You are a technical documentation writer. Given a PR
 diff, analysis, and developer interview transcript, write a thorough technical
@@ -25,14 +25,14 @@ no preamble.`;
 @Injectable()
 export class GenerationService {
   private readonly logger = new Logger(GenerationService.name);
-  private readonly client: Anthropic;
+  private readonly ai: GoogleGenAI;
 
   constructor(
     private readonly config: ConfigService,
     private readonly events: EventEmitter2,
   ) {
-    this.client = new Anthropic({
-      apiKey: this.config.getOrThrow<string>('ANTHROPIC_API_KEY'),
+    this.ai = new GoogleGenAI({
+      apiKey: this.config.getOrThrow<string>('GEMINI_API_KEY'),
     });
   }
 
@@ -43,11 +43,11 @@ export class GenerationService {
 
     try {
       const [technicalDoc, userGuide] = await Promise.all([
-        this.callClaude(
+        this.callGemini(
           TECH_DOC_SYSTEM,
           this.buildTechDocMessage(prContext, analysis, transcript),
         ),
-        this.callClaude(
+        this.callGemini(
           USER_GUIDE_SYSTEM,
           this.buildUserGuideMessage(prContext, analysis, transcript),
         ),
@@ -78,19 +78,17 @@ export class GenerationService {
     }
   }
 
-  private async callClaude(
-    system: string,
+  private async callGemini(
+    systemInstruction: string,
     userMessage: string,
   ): Promise<string> {
-    const response = await this.client.messages.create({
+    const response = await this.ai.models.generateContent({
       model: MODEL,
-      max_tokens: 2048,
-      system,
-      messages: [{ role: 'user', content: userMessage }],
+      contents: userMessage,
+      config: { systemInstruction },
     });
 
-    const block = response.content[0];
-    return block.type === 'text' ? block.text : '';
+    return response.text ?? '';
   }
 
   private buildTechDocMessage(
