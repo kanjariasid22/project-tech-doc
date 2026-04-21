@@ -2,6 +2,8 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { App } from '@slack/bolt';
+import type { PRContext } from '../common/interfaces/pr-context.interface';
+import type { VoiceCompletedEvent } from '../events/voice-completed.event';
 import { PrFailedEvent } from '../events/pr-failed.event';
 import { PrReceivedEvent } from '../events/pr-received.event';
 
@@ -9,7 +11,7 @@ const TRIGGER_PATTERN =
   /^document\s+#PR-(\d+)\s+<?((https?:\/\/github\.com\/([^/]+)\/([^/>]+)\/pull\/\d+))>?\s*$/i;
 
 const INVALID_FORMAT_MSG =
-  'Invalid format. Use: document #PR-<number> <github-pr-url>';
+  'Invalid format. Use: `document #PR-<number> <github-pr-url>`';
 
 @Injectable()
 export class SlackService implements OnModuleInit {
@@ -45,11 +47,34 @@ export class SlackService implements OnModuleInit {
     }
   }
 
+  @OnEvent('pr.ingested')
+  async handlePrIngestedProgress(ctx: PRContext): Promise<void> {
+    await this.postMessage(
+      ctx.channelId,
+      [
+        `📥 Fetched PR #${ctx.prNumber} — *${ctx.title}*`,
+        `• ${ctx.files.length} file(s), ${ctx.commits.length} commit(s)`,
+        `• Author: ${ctx.author}`,
+        `Analyzing the diff now…`,
+      ].join('\n'),
+    );
+  }
+
+  @OnEvent('voice.completed')
+  async handleVoiceCompletedProgress(
+    payload: VoiceCompletedEvent,
+  ): Promise<void> {
+    await this.postMessage(
+      payload.prContext.channelId,
+      `📝 Got your answers — writing the docs now…`,
+    );
+  }
+
   @OnEvent('pr.failed')
   async handlePrFailed(payload: PrFailedEvent): Promise<void> {
     await this.postMessage(
       payload.channelId,
-      `Failed to process PR #${payload.prNumber}: ${payload.reason}`,
+      `❌ Failed to process PR #${payload.prNumber}: ${payload.reason}`,
     );
   }
 
@@ -85,7 +110,9 @@ export class SlackService implements OnModuleInit {
 
       this.events.emit('pr.received', event);
 
-      await say(`Got it! Analyzing PR #${prNumber} — I'll follow up shortly.`);
+      await say(
+        `👋 Got it! Working on PR #${prNumber} — I'll post updates here.`,
+      );
     });
   }
 }

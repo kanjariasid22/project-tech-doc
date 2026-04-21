@@ -4,6 +4,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AnalysisModule } from './analysis/analysis.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { validateEnv } from './common/config/env.validation';
 import { GenerationModule } from './generation/generation.module';
 import { GithubModule } from './github/github.module';
 import { KbModule } from './knowledge-base/kb.module';
@@ -12,7 +13,7 @@ import { VoiceModule } from './voice/voice.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     EventEmitterModule.forRoot(),
     SlackModule,
     GithubModule,
