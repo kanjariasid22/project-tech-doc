@@ -55,6 +55,9 @@ export class VoiceService {
               'Is now a good time?',
             ].join(' '),
           },
+          tts: {
+            voice_id: 'ePn9OncKq8KyJvrTRqTi',
+          },
         },
       });
 
