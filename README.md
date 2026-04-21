@@ -42,13 +42,16 @@ What you'll see in the thread:
 2. `📥 Fetched PR #42 — "Add retry middleware"` — N files, M commits
 3. A voice-chat invite link — 2-minute call with an AI interviewer
 4. `📝 Got your answers — writing the docs now…`
-5. `✅ Documentation updated for PR #42` with paths to the committed files
+5. Draft `.md` files uploaded to the thread + **Approve & Commit** / **Reject** buttons
+6. On approve → `✅ Approved — committed docs for PR #42` with paths
+7. On reject → `🗑️ Discarded draft for PR #42`
+8. No action within 30 min → `⌛ Preview expired`
 
-Two files land on the target repo's default branch:
+Two files land on the target repo's default branch (only on approval):
 - `docs/technical/<module>.md` — thorough technical writeup
 - `docs/guides/<module>.md` — plain-language user guide
 
-Subsequent PRs on the same module append new sections instead of overwriting.
+Subsequent PRs on the same module don't append a changelog section — the tool reads the current doc and produces a revised, coherent full version that integrates the new change.
 
 ---
 
@@ -80,7 +83,8 @@ The app validates all required vars at boot and refuses to start with a clear er
 Create an app at [api.slack.com/apps](https://api.slack.com/apps) and enable:
 
 - **Socket Mode** — on (no public URL needed)
-- **Bot Token Scopes**: `chat:write`, `app_mentions:read`, `channels:history`, `groups:history`, `im:history`
+- **Interactivity & Shortcuts** — on (required for the Approve/Reject buttons; Socket Mode routes interactions automatically, so no Request URL is needed)
+- **Bot Token Scopes**: `chat:write`, `files:write`, `app_mentions:read`, `channels:history`, `groups:history`, `im:history`
 - **Event Subscriptions → Subscribe to bot events**: `message.channels`, `message.groups`, `message.im`
 - Install the app to your workspace, invite it into a channel
 
@@ -113,8 +117,8 @@ src/
 ├── github/           # PR ingest + atomic multi-file commits (Git Data API)
 ├── analysis/         # Gemini structured-output JSON analysis
 ├── voice/            # ElevenLabs agent creation + conversation polling
-├── generation/       # Parallel tech-doc + user-guide generation
-├── knowledge-base/   # Append/create docs, commit, confirm
+├── generation/       # Reads existing docs, produces merged tech-doc + user-guide
+├── knowledge-base/   # Posts preview to Slack, awaits approval, commits on approve
 ├── events/           # Event class definitions (typed payloads)
 └── common/
     ├── interfaces/   # Shared PRContext, AnalysisResult

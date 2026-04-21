@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { App } from '@slack/bolt';
 import type { PRContext } from '../common/interfaces/pr-context.interface';
+import { DocsApprovedEvent } from '../events/docs-approved.event';
+import { DocsRejectedEvent } from '../events/docs-rejected.event';
 import type { VoiceCompletedEvent } from '../events/voice-completed.event';
 import { PrFailedEvent } from '../events/pr-failed.event';
 import { PrReceivedEvent } from '../events/pr-received.event';
@@ -12,6 +14,15 @@ const TRIGGER_PATTERN =
 
 const INVALID_FORMAT_MSG =
   'Invalid format. Use: `document #PR-<number> <github-pr-url>`';
+
+const APPROVE_ACTION = 'approve_docs';
+const REJECT_ACTION = 'reject_docs';
+
+export interface FileUpload {
+  filename: string;
+  content: string;
+  title?: string;
+}
 
 @Injectable()
 export class SlackService implements OnModuleInit {
@@ -31,7 +42,7 @@ export class SlackService implements OnModuleInit {
       appToken: this.config.getOrThrow<string>('SLACK_APP_TOKEN'),
     });
 
-    this.registerMessageHandler();
+    this.registerHandlers();
 
     void this.app.start().then(() => {
       this.logger.log('Slack app connected via Socket Mode');
@@ -44,6 +55,64 @@ export class SlackService implements OnModuleInit {
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to post Slack message: ${msg}`);
+    }
+  }
+
+  async uploadFiles(channelId: string, files: FileUpload[]): Promise<void> {
+    try {
+      await this.app.client.files.uploadV2({
+        channel_id: channelId,
+        file_uploads: files.map((f) => ({
+          filename: f.filename,
+          content: f.content,
+          title: f.title ?? f.filename,
+        })),
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to upload Slack files: ${msg}`);
+    }
+  }
+
+  async postApprovalPrompt(
+    channelId: string,
+    text: string,
+    prNumber: number,
+  ): Promise<void> {
+    try {
+      await this.app.client.chat.postMessage({
+        channel: channelId,
+        text,
+        blocks: [
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text },
+          },
+          {
+            type: 'actions',
+            block_id: `approval_${prNumber}`,
+            elements: [
+              {
+                type: 'button',
+                action_id: APPROVE_ACTION,
+                style: 'primary',
+                text: { type: 'plain_text', text: 'Approve & Commit' },
+                value: String(prNumber),
+              },
+              {
+                type: 'button',
+                action_id: REJECT_ACTION,
+                style: 'danger',
+                text: { type: 'plain_text', text: 'Reject' },
+                value: String(prNumber),
+              },
+            ],
+          },
+        ],
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to post approval prompt: ${msg}`);
     }
   }
 
@@ -78,7 +147,7 @@ export class SlackService implements OnModuleInit {
     );
   }
 
-  private registerMessageHandler() {
+  private registerHandlers() {
     this.app.message(async ({ message, say }) => {
       if (message.subtype !== undefined) return;
 
@@ -114,5 +183,50 @@ export class SlackService implements OnModuleInit {
         `👋 Got it! Working on PR #${prNumber} — I'll post updates here.`,
       );
     });
+
+    this.app.action(APPROVE_ACTION, async ({ ack, body, action }) => {
+      await ack();
+      this.emitDecision(APPROVE_ACTION, body, action);
+    });
+
+    this.app.action(REJECT_ACTION, async ({ ack, body, action }) => {
+      await ack();
+      this.emitDecision(REJECT_ACTION, body, action);
+    });
+  }
+
+  private emitDecision(actionId: string, body: unknown, action: unknown): void {
+    const channelId = (body as { channel?: { id?: string } })?.channel?.id;
+    const actionedBy = (body as { user?: { id?: string } })?.user?.id;
+    const value = (action as { value?: string })?.value;
+
+    if (!channelId || !actionedBy || !value) {
+      this.logger.error(
+        `Missing fields on ${actionId} payload (channel/user/value)`,
+      );
+      return;
+    }
+
+    const prNumber = parseInt(value, 10);
+    if (Number.isNaN(prNumber)) {
+      this.logger.error(`Invalid prNumber in ${actionId} payload: ${value}`);
+      return;
+    }
+
+    if (actionId === APPROVE_ACTION) {
+      const event = Object.assign(new DocsApprovedEvent(), {
+        prNumber,
+        channelId,
+        actionedBy,
+      });
+      this.events.emit('docs.approved', event);
+    } else {
+      const event = Object.assign(new DocsRejectedEvent(), {
+        prNumber,
+        channelId,
+        actionedBy,
+      });
+      this.events.emit('docs.rejected', event);
+    }
   }
 }

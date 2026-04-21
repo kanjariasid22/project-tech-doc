@@ -6,4 +6,6 @@ export class DocsGeneratedEvent {
   analysis: AnalysisResult;
   technicalDoc: string;
   userGuide: string;
+  techPath: string;
+  guidePath: string;
 }
