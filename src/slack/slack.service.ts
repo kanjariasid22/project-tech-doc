@@ -161,7 +161,9 @@ export class SlackService implements OnModuleInit {
       const match = TRIGGER_PATTERN.exec(text);
 
       if (!match) {
-        await say(INVALID_FORMAT_MSG);
+        if (/^document\s/i.test(text)) {
+          await say(INVALID_FORMAT_MSG);
+        }
         return;
       }
 

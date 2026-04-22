@@ -7,7 +7,7 @@ import type { PRContext } from '../common/interfaces/pr-context.interface';
 import { PrAnalyzedEvent } from '../events/pr-analyzed.event';
 import { PrFailedEvent } from '../events/pr-failed.event';
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3-flash-preview';
 
 const SYSTEM_PROMPT = `You are a technical documentation assistant. Analyze the given PR diff and context. Return a JSON object with:
 - summary: one paragraph explaining what this PR does

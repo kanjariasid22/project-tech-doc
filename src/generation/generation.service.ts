@@ -10,7 +10,7 @@ import { PrFailedEvent } from '../events/pr-failed.event';
 import { VoiceCompletedEvent } from '../events/voice-completed.event';
 import { GithubService } from '../github/github.service';
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3-flash-preview';
 
 const TECH_DOC_NEW_SYSTEM = `You are a technical documentation writer. Given a
 PR diff, analysis, and developer interview transcript, write a thorough
